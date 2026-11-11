@@ -1,10 +1,26 @@
-import readline from "node:readline";
-const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-});
-
 const tasks = [];
+let pending = null;
+let buffer = "";
+
+function ask(prompt, callback) {
+  process.stdout.write(prompt);
+  pending = callback;
+}
+
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let i;
+  while ((i = buffer.indexOf("\n")) !== -1) {
+    const line = buffer.slice(0, i).replace(/\r$/, "");
+    buffer = buffer.slice(i + 1);
+    if (pending) {
+      const callback = pending;
+      pending = null;
+      callback(line);
+    }
+  }
+});
 
 function showMenu() {
   console.log("1: Add Task");
@@ -12,70 +28,47 @@ function showMenu() {
   console.log("3: Delete Task");
   console.log("4: Search Task");
   console.log("5: Exit");
-  rl.question("Choose an option:", handleInput);
-}
-
-function findTasks(term) {
-  const query = term.trim().toLowerCase();
-  if (!query) return [];
-  return tasks
-    .map((note, index) => ({ id: index + 1, note }))
-    .filter(({ note }) => note.toLowerCase().includes(query));
+  ask("Choose an option: ", handleInput);
 }
 
 function handleInput(input) {
   const option = input.trim();
 
   if (option === "1") {
-    rl.question("\nEnter Note:", (note) => {
-      tasks.push(note);
-      console.log("Note", note);
+    ask("Enter Note: ", (note) => {
+      tasks.push(note.trim());
+      console.log("Note added.");
       showMenu();
     });
   } else if (option === "2") {
-    console.log("\n Created tasks:");
-    if (tasks.length <= 0) {
-      console.log("\n No tasks Yet,Add tasks.");
-      return showMenu();
-    }
-    tasks.forEach((note, index) => {
-      console.log(`${index + 1}:${note}`);
-    });
+    if (tasks.length === 0) console.log("No tasks yet.");
+    tasks.forEach((note, i) => console.log(`${i + 1}: ${note}`));
     showMenu();
   } else if (option === "3") {
-    rl.question("Enter Note ID: ", (note) => {
-      const id = note.trim();
-      if (!id || tasks.length <= 0 || id > tasks.length) {
-        console.log("\n Invaild id");
-        return showMenu();
+    ask("Enter Task ID: ", (line) => {
+      const id = Number(line.trim());
+      if (Number.isInteger(id) && id >= 1 && id <= tasks.length) {
+        console.log("Deleted:", tasks.splice(id - 1, 1)[0]);
+      } else {
+        console.log("Invalid ID.");
       }
-      const deleted = tasks.splice(Number(id) - 1, 1);
-      console.log("Deleted ", deleted);
-
       showMenu();
     });
   } else if (option === "4") {
-    rl.question("\nSearch tasks: ", (term) => {
-      if (!term.trim()) {
-        console.log("\n Enter something to search for.");
-        return showMenu();
-      }
-      const matches = findTasks(term);
-      if (matches.length <= 0) {
-        console.log(`\n No tasks found for "${term.trim()}".`);
-        return showMenu();
-      }
-      console.log(`\n Found ${matches.length} matching note(s):`);
-      matches.forEach(({ id, note }) => {
-        console.log(`${id}:${note}`);
-      });
+    ask("Search tasks: ", (term) => {
+      const query = term.trim().toLowerCase();
+      const matches = tasks
+        .map((note, i) => ({ id: i + 1, note }))
+        .filter(({ note }) => note.toLowerCase().includes(query));
+      if (matches.length === 0) console.log("No matches.");
+      matches.forEach(({ id, note }) => console.log(`${id}: ${note}`));
       showMenu();
     });
   } else if (option === "5") {
     console.log("Thanks for using tasks App");
-    rl.close();
+    process.exit(0);
   } else {
-    console.log("Incorrect Input");
+    console.log("Invalid option.");
     showMenu();
   }
 }
